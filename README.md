@@ -19,10 +19,10 @@ DashPlan — Commercial Dashboard
 
 | BU | Focus |
 |---|---|
-| EMS Prescrição | Prescription drug sell-out & demand |
-| Brace Pharma | Generic drugs commercial performance |
-| Ofta | Ophthalmology portfolio |
-| Underskin | Dermatology & aesthetics |
+| BU Prescrição | Prescription drug sell-out & demand |
+| BU Genéricos | Generic drugs commercial performance |
+| BU Oftalmologia | Ophthalmology portfolio |
+| BU Dermatologia | Dermatology & aesthetics |
 
 ---
 
