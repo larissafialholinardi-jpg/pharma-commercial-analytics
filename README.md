@@ -35,8 +35,7 @@ pharma-commercial-analytics/
 ├── dax/
 │   └── measures/      # Power BI DAX measures by domain
 └── docs/
-└── screenshots/   # Dashboard previews
-
+    └── screenshots/   # Dashboard previews
 ---
 
 ## 🔑 Key Technical Highlights
