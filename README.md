@@ -27,6 +27,7 @@ DashPlan — Commercial Dashboard
 ---
 
 ## 🗂️ Repository Structure
+```
 pharma-commercial-analytics/
 │
 ├── sql/
@@ -36,6 +37,7 @@ pharma-commercial-analytics/
 │   └── measures/      # Power BI DAX measures by domain
 └── docs/
     └── screenshots/   # Dashboard previews
+```
 ---
 
 ## 🔑 Key Technical Highlights
