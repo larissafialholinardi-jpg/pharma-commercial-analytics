@@ -1,0 +1,41 @@
+-- ============================================================
+-- MEDIDAS DE SELL-OUT
+-- Módulo: 02_SELLOUT
+-- ============================================================
+
+-- Variação da demanda entre janelas móveis de 3 meses (L3M)
+-- Compara os últimos 3 meses com os 3 meses imediatamente anteriores
+-- Mais sensível a tendências recentes do que o YoY tradicional
+L3M =
+VAR ultimo_mes = MAX('00_COMUM_DIM_calendario'[Data])
+
+-- Janela atual: últimos 3 meses a partir do mês corrente
+VAR total_mes_atual =
+    CALCULATE(
+        [02_REALIZADO],
+        DATESINPERIOD(
+            '00_COMUM_DIM_calendario'[Data],
+            EOMONTH(ultimo_mes, 0),
+            -3,
+            MONTH
+        )
+    )
+
+-- Janela anterior: os 3 meses que precedem a janela atual
+VAR total_mes_anterior =
+    CALCULATE(
+        [02_REALIZADO],
+        DATESINPERIOD(
+            '00_COMUM_DIM_calendario'[Data],
+            EOMONTH(ultimo_mes, -3),
+            -3,
+            MONTH
+        )
+    )
+
+RETURN
+    DIVIDE(
+        total_mes_atual - total_mes_anterior,
+        total_mes_anterior,
+        BLANK()
+    )
