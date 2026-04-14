@@ -1,12 +1,12 @@
-# 📊 Pharma Analytics Portfolio
+# Pharma Analytics Portfolio
 
 Collection of commercial analytics projects built for the pharmaceutical industry, combining **Databricks (Spark SQL / Delta Lake)**, **Power BI**, and advanced DAX modeling.
 
 ---
 
-## 🗂️ Projects
+## Projects
 
-### 💼 [Pharma Sales Intelligence](./pharma-sales-intelligence/)
+### [Pharma Sales Intelligence](./pharma-sales-intelligence/)
 End-to-end commercial analytics platform serving hundreds of users across 4 business units.
 Built with Databricks + Power BI, covering sell-out, sell-in, demand planning, quotas, and indirect sales channels.
 
@@ -14,14 +14,14 @@ Built with Databricks + Power BI, covering sell-out, sell-in, demand planning, q
 
 ---
 
-### 🏆 [Performance Comercial 360°](./cases/performance-comercial-360/)
+### [Performance Comercial 360°](./cases/performance-comercial-360/)
 Selection case built for a pharmaceutical company, simulating B2B sell-in analytics between distributors and pharmacies.
 
 **Highlights:** Waterfall Bruto→Líquido, Elasticidade Volume×Preço, narrative analytics via DAX, dynamic ranking with TOPN+SUMX.
 
 ---
 
-## 🛠️ Stack
+## Stack
 
 | Layer | Technology |
 |---|---|
@@ -33,6 +33,6 @@ Selection case built for a pharmaceutical company, simulating B2B sell-in analyt
 
 ---
 
-## ⚠️ Note on Data
+## Note on Data
 
 All queries and measures use anonymized or synthetic data only. No real customer, patient, or proprietary commercial data is included.
