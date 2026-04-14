@@ -1,0 +1,85 @@
+-- ============================================================
+-- MEDIDAS DE WATERFALL — Composição da Receita
+-- Decomposição do Faturamento Bruto até o Líquido
+-- Bruto → Desconto → Devolução → Impostos → Abatimentos → Líquido
+-- ============================================================
+
+-- Tabela auxiliar desconectada que define as etapas e ordem do waterfall
+-- Usada como eixo do visual — não se conecta ao modelo via relacionamento
+Etapas Waterfall =
+DATATABLE(
+    "Etapa", STRING, "Ordem", INTEGER,
+    {
+        { "Bruto",        1 },
+        { "Desconto",     2 },
+        { "Devolução",    3 },
+        { "Impostos",     4 },
+        { "Abatimentos",  5 },
+        { "Líquido",      6 }
+    }
+)
+
+-- Faturamento a preço de tabela (sem descontos)
+Preco Tabela (R$) =
+SUM('FATO_SELLIN'[Vlr Fat Preço Tabela])
+
+-- Faturamento bruto de vendas normais já com desconto comercial aplicado
+Faturamento Bruto (Vendas) =
+SUMX(
+    FILTER('FATO_SELLIN', 'FATO_SELLIN'[Tipo de Movimento] = "Venda normal"),
+    'FATO_SELLIN'[Vlr Fat Preço Tabela]
+        - ('FATO_SELLIN'[Vlr Fat Preço Tabela] * 'FATO_SELLIN'[%Desc Comercial])
+)
+
+-- Desconto comercial em R$ (base de cálculo × % desconto, apenas vendas normais)
+Desconto Comercial (R$) =
+CALCULATE(
+    SUMX(
+        'FATO_SELLIN',
+        'FATO_SELLIN'[Base Desconto Comercial] * 'FATO_SELLIN'[%Desc Comercial]
+    ),
+    KEEPFILTERS('FATO_SELLIN'[Tipo de Movimento] = "Venda normal")
+)
+
+-- Devoluções em valor absoluto
+Devolução (R$) =
+ABS(SUM('FATO_SELLIN'[Vlr Devoluções]))
+
+-- Impostos em valor absoluto
+Impostos (R$) =
+ABS(SUM('FATO_SELLIN'[Vlr Impostos]))
+
+-- Abatimentos em valor absoluto
+Abatimentos (R$) =
+ABS(SUM('FATO_SELLIN'[DRE-Abatimentos (Y)]))
+
+-- Abatimentos como % do faturamento bruto (s/ devoluções)
+Abatimentos (%) =
+DIVIDE([Abatimentos (R$)], [Faturamento Total Bruto (s/dev)])
+
+-- Impostos como % do faturamento bruto (s/ devoluções)
+Impostos (%) =
+DIVIDE([Impostos (R$)], [Faturamento Total Bruto (s/dev)])
+
+-- Faturamento líquido composto (Preço Tabela - deduções)
+Liquido (WF) =
+[Preco Tabela (R$)]
+    + [Desconto Comercial (R$)]
+    + [Devolução (R$)]
+    + [Impostos (R$)]
+    + [Abatimentos (R$)]
+
+-- Medida central do waterfall: retorna o valor correto para cada etapa
+-- Depende da tabela desconectada [Etapas Waterfall] via SELECTEDVALUE
+Valor Waterfall =
+VAR etapa = SELECTEDVALUE('Etapas Waterfall'[Etapa])
+RETURN
+SWITCH(
+    etapa,
+    "Bruto",        [Faturamento Total Bruto (s/dev)],
+    "Devolução",   -ABS([Devolução (R$)]),
+    "Impostos",    -ABS([Impostos (R$)]),
+    "Abatimentos", -ABS([Abatimentos (R$)]),
+    "Líquido",      [Faturamento Total Líquido],
+    BLANK()
+)
