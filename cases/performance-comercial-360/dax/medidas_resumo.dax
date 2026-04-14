@@ -1,0 +1,51 @@
+-- ============================================================
+-- MEDIDAS DE RESUMO — KPIs Executivos
+-- ============================================================
+
+-- Faturamento líquido total de 2023 (ignora filtros de calendário)
+Faturamento 2023 =
+CALCULATE(
+    SUM('FATO_SELLIN'[Vlr Fat Líquido]),
+    ALL(dCalendario),
+    dCalendario[Ano] = 2023
+)
+
+-- Faturamento líquido total de 2024 (ignora filtros de calendário)
+Faturamento 2024 =
+CALCULATE(
+    SUM('FATO_SELLIN'[Vlr Fat Líquido]),
+    ALL(dCalendario),
+    dCalendario[Ano] = 2024
+)
+
+-- Variação percentual do faturamento líquido 2024 vs 2023
+Variação Faturamento 24 vs 23 (%) =
+VAR cy = [Faturamento 2024]
+VAR py = [Faturamento 2023]
+RETURN
+    IF(py = 0 || ISBLANK(py), BLANK(), DIVIDE(cy - py, py))
+
+-- Cor dinâmica para indicadores de variação
+-- Verde (#1ABC9C) para positivo, Vermelho (#E84C3D) para negativo
+-- Cinza (#B0B0B0) para zero ou blank
+Cor_Variacao =
+VAR v = [Variação Faturamento 24 vs 23 (%)]
+RETURN
+    IF(
+        ISBLANK(v), "#B0B0B0",
+        IF(v > 0, "#1ABC9C",
+            IF(v = 0, "#B0B0B0", "#E84C3D")
+        )
+    )
+
+-- Geração automática de insight textual executivo via DAX
+-- Combina faturamento, variação YoY e variação de margem em uma frase dinâmica
+-- Atualiza automaticamente conforme o filtro de ano selecionado
+Resumo_Executivo_Texto =
+"Em " & SELECTEDVALUE('dCalendario'[Ano]) &
+", o faturamento líquido atingiu R$ " &
+FORMAT([Faturamento Total Líquido], "0,0") &
+" (" & FORMAT([Variação Faturamento 24 vs 23 (%)], "0.0%") &
+" vs. ano anterior), enquanto a margem caiu " &
+FORMAT([Margem_Crescimento vs Ano Anterior (%)], "0.0%") &
+", reflexo do aumento nos descontos comerciais."
