@@ -25,6 +25,19 @@ Construir uma solução analítica completa de performance comercial, cobrindo f
 | Dinâmica de Preço | Elasticidade volume x preço, variação vs ano anterior, preço médio por produto |
 
 ---
+## 🧠 Padrões DAX Avançados
+
+| Medida | Padrão Utilizado |
+|---|---|
+| `Elasticidade Volume × Preço` | Classificação dinâmica com 6 cenários via `SWITCH(TRUE())` e tolerância configurável |
+| `Valor Waterfall` | Tabela desconectada `DATATABLE` + `SELECTEDVALUE` + `SWITCH` |
+| `Top Cliente (Maior Desconto)` | Ranking dinâmico via `ADDCOLUMNS` + `SUMMARIZE` + `TOPN` + `MAXX` |
+| `Resumo_Executivo_Texto` | Narrative analytics — insight textual gerado automaticamente via DAX |
+| `Título – Desconto` | UI responsiva ao contexto via `ISFILTERED` + `SELECTEDVALUE` |
+| `Variação % Top 10 Clientes` | `TOPN` dentro de `SUMX` com ano fixo para ranking independente por período |
+| `Cor_Variacao` | Formatação condicional via DAX retornando hex de cor |
+
+---
 
 ## 🔑 Destaques Técnicos
 
@@ -49,10 +62,12 @@ Construir uma solução analítica completa de performance comercial, cobrindo f
 
 ## 🖼️ Screenshots
 
-![Resumo Executivo](screenshots/01_resumo_executivo.png)
-![Visão por Produtos](screenshots/02_produtos.png)
-![Detalhe do Produto](screenshots/03_detalhe_produto.png)
-![Performance por Cliente](screenshots/04_clientes.png)
-![Análise de Descontos](screenshots/05_descontos.png)
-![Visão de Prazos](screenshots/06_prazos.png)
-![Dinâmica de Preço](screenshots/07_preco.png)
+![Menu](screenshots/01_menu.png)
+![Resumo Executivo](screenshots/02_resumo_executivo.png)
+![Visão por Produtos](screenshots/03_visao_produtos.png)
+![Detalhe do Produto](screenshots/04_detalhe_produto.png)
+![Performance por Cliente](screenshots/05_clientes.png)
+![Análise de Descontos](screenshots/06_descontos.png)
+![Visão de Prazos](screenshots/07_prazos.png)
+![Dinâmica de Preço](screenshots/08_preco_competitividade.png)
+![Visão Geral](screenshots/09_visao_geral_performance.png)
