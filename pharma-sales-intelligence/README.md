@@ -102,3 +102,10 @@ pharma-sales-intelligence/
 | BU Genéricos | Generic drugs |
 | BU Oftalmologia | Ophthalmology |
 | BU Dermatologia | Dermatology & aesthetics |
+
+## 🖼️ Screenshots
+
+![Sell-In](screenshots/01_sellin.png)
+![Sell-Out](screenshots/02_sellout.png)
+![Indiretos](screenshots/03_indiretos.png)
+![Painel Analítico](screenshots/04_painel_analitico.png)
