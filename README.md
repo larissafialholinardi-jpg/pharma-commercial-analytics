@@ -17,7 +17,7 @@ Built with Databricks + Power BI, covering sell-out, sell-in, demand planning, q
 ### [Performance Comercial 360°](./cases/performance-comercial-360/)
 Selection case built for a pharmaceutical company, simulating B2B sell-in analytics between distributors and pharmacies.
 
-**Highlights:** Waterfall Bruto→Líquido, Elasticidade Volume×Preço, narrative analytics via DAX, dynamic ranking with TOPN+SUMX.
+**Highlights:** Gross → Net Revenue Waterfall, Volume × Price Elasticity, narrative analytics via DAX, dynamic ranking with TOPN+SUMX.
 
 ---
 
