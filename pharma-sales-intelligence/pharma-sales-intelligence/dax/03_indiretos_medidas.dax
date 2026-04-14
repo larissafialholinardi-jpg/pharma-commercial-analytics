@@ -1,0 +1,361 @@
+-- ============================================================
+-- MEDIDAS DE INDIRETOS — Painel Comercial
+-- Módulo: 03_INDIRETOS
+--
+-- Contexto arquitetural:
+-- O painel comercial (03_INDIRETOS_DIM_painel_comercial) não possui
+-- relacionamento direto com 00_COMUM_DIM_pdv. O TREATAS é usado para
+-- injetar os CNPJs do painel ativo no contexto de filtro da dimensão
+-- de PDV, resolvendo a relação many-to-many sem relacionamento físico
+-- no modelo.
+-- ============================================================
+
+
+-- ============================================================
+-- MEDIDAS BASE (sem filtro de produto)
+-- ============================================================
+
+-- Objetivo de demanda conforme métrica selecionada (Unidade/Reais)
+-- REMOVEFILTERS no canal garante que cotas não sejam segmentadas por origem
+03_1_Objetivo_Demanda =
+CALCULATE(
+    SWITCH(
+        SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica]),
+        "Reais", SUM('03_INDIRETOS_FATO_cota'[cota_demanda])
+    ),
+    REMOVEFILTERS('02_SELLOUT_FATO_mensal'[canal_origem_info])
+)
+
+-- Realizado de demanda: soma mensal + diário (tabelas Gold separadas)
+-- A separação em fato_mensal e fato_diario reflete a arquitetura Gold
+-- onde dados fechados ficam na mensal e o mês corrente na diária
+03_2_Realizado_Demanda =
+SWITCH(
+    SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica]),
+    "Unidade",
+        SUM('02_SELLOUT_FATO_mensal'[qt_unidade])
+        + SUM('02_SELLOUT_FATO_diario'[qt_unidade]),
+    "Reais",
+        SUM('02_SELLOUT_FATO_mensal'[vl_reais_preco_fabrica])
+        + SUM('02_SELLOUT_FATO_diario'[vl_reais_preco_fabrica])
+)
+
+-- Projetado de demanda com lógica de lag de dados
+-- Problema: a tabela mensal pode não ter chegado ainda para o mês anterior
+-- Solução: verifica se o mês anterior existe na mensal; se não, usa projeção
+-- Resultado: combina realizado (meses fechados) + projeção (mês atual + lag)
+03_3_Projetado_Demanda =
+VAR _mes_atual            = MONTH(TODAY())
+VAR _ano_atual            = YEAR(TODAY())
+VAR _mes_anterior         = IF(_mes_atual = 1, 12, _mes_atual - 1)
+VAR _ano_mes_anterior     = IF(_mes_atual = 1, _ano_atual - 1, _ano_atual)
+
+-- Detecta se a tabela mensal já recebeu os dados do mês anterior
+VAR _mensal_tem_mes_anterior =
+    CALCULATE(
+        COUNTROWS('02_SELLOUT_FATO_mensal'),
+        REMOVEFILTERS(),
+        '00_COMUM_DIM_calendario'[Mes] = _mes_anterior,
+        '00_COMUM_DIM_calendario'[Ano] = _ano_mes_anterior
+    ) > 0
+
+VAR _mes_corte  = IF(_mensal_tem_mes_anterior, _mes_atual, _mes_anterior)
+VAR _ano_corte  = IF(_mensal_tem_mes_anterior, _ano_atual, _ano_mes_anterior)
+VAR _metrica    = SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica])
+
+-- Realizado: apenas meses já fechados na tabela mensal
+VAR _realizado =
+    SWITCH(
+        _metrica,
+        "Unidade",
+            CALCULATE(
+                SUM('02_SELLOUT_FATO_mensal'[qt_unidade]),
+                FILTER(
+                    ALLSELECTED('00_COMUM_DIM_calendario'),
+                    '00_COMUM_DIM_calendario'[Ano] < _ano_corte ||
+                    (
+                        '00_COMUM_DIM_calendario'[Ano] = _ano_corte &&
+                        '00_COMUM_DIM_calendario'[Mes] < _mes_corte
+                    )
+                )
+            ),
+        "Reais",
+            CALCULATE(
+                SUM('02_SELLOUT_FATO_mensal'[vl_reais_preco_fabrica]),
+                FILTER(
+                    ALLSELECTED('00_COMUM_DIM_calendario'),
+                    '00_COMUM_DIM_calendario'[Ano] < _ano_corte ||
+                    (
+                        '00_COMUM_DIM_calendario'[Ano] = _ano_corte &&
+                        '00_COMUM_DIM_calendario'[Mes] < _mes_corte
+                    )
+                )
+            )
+    )
+
+-- Projeção: mês atual + mês anterior se mensal ainda não chegou
+VAR _projetado =
+    SWITCH(
+        _metrica,
+        "Unidade",
+            CALCULATE(
+                SUM('02_SELLOUT_FATO_projecao'[qt_unidade]),
+                FILTER(
+                    ALLSELECTED('00_COMUM_DIM_calendario'),
+                    (
+                        '00_COMUM_DIM_calendario'[Ano] = _ano_atual &&
+                        '00_COMUM_DIM_calendario'[Mes] = _mes_atual
+                    ) ||
+                    (
+                        NOT _mensal_tem_mes_anterior &&
+                        '00_COMUM_DIM_calendario'[Ano] = _ano_mes_anterior &&
+                        '00_COMUM_DIM_calendario'[Mes] = _mes_anterior
+                    )
+                )
+            ),
+        "Reais",
+            CALCULATE(
+                SUM('02_SELLOUT_FATO_projecao'[vl_reais_preco_fabrica]),
+                FILTER(
+                    ALLSELECTED('00_COMUM_DIM_calendario'),
+                    (
+                        '00_COMUM_DIM_calendario'[Ano] = _ano_atual &&
+                        '00_COMUM_DIM_calendario'[Mes] = _mes_atual
+                    ) ||
+                    (
+                        NOT _mensal_tem_mes_anterior &&
+                        '00_COMUM_DIM_calendario'[Ano] = _ano_mes_anterior &&
+                        '00_COMUM_DIM_calendario'[Mes] = _mes_anterior
+                    )
+                )
+            )
+    )
+
+RETURN
+    COALESCE(_realizado, 0) + COALESCE(_projetado, 0)
+
+-- Objetivo OL por canal (exclui ASSOCIATIVISMO que não tem cota de venda)
+03_4_Objetivo_OL =
+VAR painel             = SELECTEDVALUE('03_INDIRETOS_DIM_painel_comercial'[painel])
+VAR metricaSelecionada = SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica])
+VAR resultado =
+    IF(
+        painel = "ASSOCIATIVISMO",
+        BLANK(),
+        CALCULATE(
+            SWITCH(
+                metricaSelecionada,
+                "Unidade", SUM('03_INDIRETOS_FATO_cota'[cota_venda_unidade]),
+                "Reais",   SUM('03_INDIRETOS_FATO_cota'[cota_venda_pf]),
+                BLANK()
+            ),
+            REMOVEFILTERS('02_SELLOUT_FATO_mensal'[canal_origem_info])
+        )
+    )
+RETURN resultado
+
+-- Realizado OL com status dinâmico (Solicitado / Atendido / Faturado)
+-- SWITCH(TRUE()) avalia cada condição em ordem — padrão para lógica condicional complexa
+03_5_Realizado_OL =
+CALCULATE(
+    VAR BaseSelecionada = SELECTEDVALUE('03_INDIRETOS_DIM_status_venda'[Status])
+    RETURN
+    SWITCH(
+        TRUE(),
+        BaseSelecionada = "Solicitado",
+            SWITCH(
+                SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica]),
+                "Reais",   SUM('03_INDIRETOS_FATO_realizado'[vl_liquido_solicitado_sem_imposto]),
+                "Unidade", SUM('03_INDIRETOS_FATO_realizado'[qt_solicitada])
+            ),
+        BaseSelecionada = "Atendido",
+            SWITCH(
+                SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica]),
+                "Reais",   SUM('03_INDIRETOS_FATO_realizado'[vl_liquido_atendido_sem_imposto]),
+                "Unidade", SUM('03_INDIRETOS_FATO_realizado'[qt_atendida])
+            ),
+        BaseSelecionada = "Faturado",
+            SWITCH(
+                SELECTEDVALUE('00_COMUM_DIM_filtro_metricas'[Metrica]),
+                "Reais",   SUM('03_INDIRETOS_FATO_realizado'[vl_liquido_faturado]),
+                "Unidade", SUM('03_INDIRETOS_FATO_realizado'[qt_faturada])
+            )
+    ),
+    REMOVEFILTERS('02_SELLOUT_FATO_mensal'[canal_origem_info])
+)
+
+
+-- ============================================================
+-- MEDIDAS COM TREATAS — Filtro dinâmico por painel e mix de produto
+--
+-- Padrão central: TREATAS duplo
+-- 1. Injeta SKUs filtrados por flag (prioritário/lançamento/promoção)
+--    na dimensão de produtos sem relacionamento direto com o mix
+-- 2. Injeta CNPJs do painel comercial ativo (versionado por dt_mes_base)
+--    na dimensão de PDV, resolvendo many-to-many sem relacionamento físico
+-- ============================================================
+
+-- Objetivo de demanda com filtro de mix de produto + painel ativo
+03_1_Objetivo Demanda (Filtrada) =
+VAR Tipo = SELECTEDVALUE('00_COMUM_AUX_filtro_produto'[Tipo], "Todos")
+
+-- SKUs por flag de mix
+VAR SKUs_Prior =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_prioritario] = 1)
+VAR SKUs_Lanc =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_lancamento] = 1)
+VAR SKUs_Promo =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_acao_promocional] = 1)
+
+-- CNPJs do painel ativo (sem filtro de produto)
+VAR CNPJs_Painel = VALUES('03_INDIRETOS_DIM_painel_comercial'[nu_cnpj_pdv])
+
+RETURN
+SWITCH(
+    Tipo,
+    "Ação promocional",
+        CALCULATE([03_1_Objetivo_Demanda],
+            TREATAS(SKUs_Promo,   '00_COMUM_DIM_produtos'[sku_id]),
+            TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+        ),
+    "Prioritário",
+        CALCULATE([03_1_Objetivo_Demanda],
+            TREATAS(SKUs_Prior,   '00_COMUM_DIM_produtos'[sku_id]),
+            TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+        ),
+    "Lançamento",
+        CALCULATE([03_1_Objetivo_Demanda],
+            TREATAS(SKUs_Lanc,    '00_COMUM_DIM_produtos'[sku_id]),
+            TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+        ),
+    -- Default: sem filtro de SKU, apenas painel
+    CALCULATE([03_1_Objetivo_Demanda],
+        TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+    )
+)
+
+-- Demanda realizada com filtro de mix + painel versionado por mês
+-- Detalhe crítico: o painel é versionado (dt_mes_base) — busca o snapshot
+-- mais recente anterior ou igual ao mês selecionado no filtro de data
+03_2_Demanda (Filtrada) =
+VAR Tipo            = SELECTEDVALUE('00_COMUM_AUX_filtro_produto'[Tipo], "Todos")
+VAR MesSelecionado  = EOMONTH(MAX('00_COMUM_DIM_calendario'[Data]), 0)
+VAR GerenteAtivo    = SELECTEDVALUE('03_INDIRETOS_DIM_painel_comercial'[chave_setor_regional])
+
+VAR SKUs_Prior =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_prioritario] = 1)
+VAR SKUs_Lanc =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_lancamento] = 1)
+VAR SKUs_Promo =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_acao_promocional] = 1)
+
+-- Snapshot do painel: versão mais recente até o mês selecionado
+VAR MesPainel =
+    CALCULATE(
+        MAX('03_INDIRETOS_DIM_painel_comercial'[dt_mes_base]),
+        REMOVEFILTERS('03_INDIRETOS_DIM_painel_comercial'[dt_mes_base]),
+        '03_INDIRETOS_DIM_painel_comercial'[dt_mes_base] <= MesSelecionado
+    )
+
+-- CNPJs do painel no snapshot correto
+VAR CNPJs_Painel =
+    CALCULATETABLE(
+        DISTINCT('03_INDIRETOS_DIM_painel_comercial'[nu_cnpj_pdv]),
+        REMOVEFILTERS('03_INDIRETOS_DIM_painel_comercial'[dt_mes_base]),
+        '03_INDIRETOS_DIM_painel_comercial'[dt_mes_base] = MesPainel
+    )
+
+VAR PainelVazio = COUNTROWS(CNPJs_Painel) = 0
+-- Suprime linha em branco quando gerente está no escopo mas sem dados
+VAR SemGerente  = ISBLANK(GerenteAtivo) && ISINSCOPE('03_INDIRETOS_DIM_painel_comercial'[chave_setor_regional])
+
+RETURN
+IF(
+    PainelVazio || SemGerente,
+    BLANK(),
+    SWITCH(
+        Tipo,
+        "Ação promocional",
+            CALCULATE([03_2_Realizado_Demanda],
+                TREATAS(SKUs_Promo,   '00_COMUM_DIM_produtos'[sku_id]),
+                TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+            ),
+        "Prioritário",
+            CALCULATE([03_2_Realizado_Demanda],
+                TREATAS(SKUs_Prior,   '00_COMUM_DIM_produtos'[sku_id]),
+                TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+            ),
+        "Lançamento",
+            CALCULATE([03_2_Realizado_Demanda],
+                TREATAS(SKUs_Lanc,    '00_COMUM_DIM_produtos'[sku_id]),
+                TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+            ),
+        CALCULATE([03_2_Realizado_Demanda],
+            TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+        )
+    )
+)
+
+-- Projetado com filtro de mix + painel versionado
+-- Mesma lógica de snapshot do 03_2, aplicada à tabela de projeção
+03_3_Projetado Demanda (Filtrada) =
+VAR Tipo           = SELECTEDVALUE('00_COMUM_AUX_filtro_produto'[Tipo], "Todos")
+VAR MesSelecionado = EOMONTH(MAX('00_COMUM_DIM_calendario'[Data]), 0)
+
+VAR SKUs_Prior =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_prioritario] = 1)
+VAR SKUs_Lanc =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_lancamento] = 1)
+VAR SKUs_Promo =
+    CALCULATETABLE(VALUES('00_COMUM_DIM_mix_prioritario'[sku_id]), '00_COMUM_DIM_mix_prioritario'[flag_acao_promocional] = 1)
+
+VAR MesPainel =
+    CALCULATE(
+        MAX('03_INDIRETOS_DIM_painel_comercial'[dt_mes_base]),
+        REMOVEFILTERS('03_INDIRETOS_DIM_painel_comercial'[dt_mes_base]),
+        '03_INDIRETOS_DIM_painel_comercial'[dt_mes_base] <= MesSelecionado
+    )
+
+VAR CNPJs_Painel =
+    CALCULATETABLE(
+        DISTINCT('03_INDIRETOS_DIM_painel_comercial'[nu_cnpj_pdv]),
+        REMOVEFILTERS('03_INDIRETOS_DIM_painel_comercial'[dt_mes_base]),
+        '03_INDIRETOS_DIM_painel_comercial'[dt_mes_base] = MesPainel
+    )
+
+VAR PainelVazio = COUNTROWS(CNPJs_Painel) = 0
+
+RETURN
+IF(
+    PainelVazio,
+    BLANK(),
+    SWITCH(
+        Tipo,
+        "Ação promocional",
+            CALCULATE([Demanda Projeção calculada mês],
+                TREATAS(SKUs_Promo,   '00_COMUM_DIM_produtos'[sku_id]),
+                TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+            ),
+        "Prioritário",
+            CALCULATE([Demanda Projeção calculada mês],
+                TREATAS(SKUs_Prior,   '00_COMUM_DIM_produtos'[sku_id]),
+                TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+            ),
+        "Lançamento",
+            CALCULATE([Demanda Projeção calculada mês],
+                TREATAS(SKUs_Lanc,    '00_COMUM_DIM_produtos'[sku_id]),
+                TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+            ),
+        CALCULATE([Demanda Projeção calculada mês],
+            TREATAS(CNPJs_Painel, '00_COMUM_DIM_pdv'[nu_cnpj_pdv])
+        )
+    )
+)
+
+-- Cobertura do projetado vs objetivo (%)
+03_4_Cobertura Projetado (%) =
+DIVIDE([03_3_Projetado Demanda (Filtrada)], [03_1_Objetivo Demanda (Filtrada)], 0)
+
+-- Cobertura do realizado vs objetivo (%)
+03_5_Cobertura Demanda (%) =
+DIVIDE([03_2_Demanda (Filtrada)], [03_1_Objetivo Demanda (Filtrada)], 0)
